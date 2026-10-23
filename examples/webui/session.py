@@ -170,7 +170,7 @@ class Session:
 
                 with MobileImageMounter.open(self.dev.lockdown, self.rsd) as mounter:
                     mounter.mount(product_type=self.info.get("product_type"),
-                                  build=getattr(self.dev.rsd, "build_version", None),
+                                  version=self.info.get("product_version"),
                                   ecid=self.ecid(), on_status=self._note)
                 self.mount_note = "image mounted, rebuilding the link..."
                 self.rebuild_link("image mounted")

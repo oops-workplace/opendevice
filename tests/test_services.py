@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import plistlib
 import socket
 import threading
 import time
 from pathlib import Path
+from typing import Optional
 
 import pytest
 
@@ -807,14 +809,14 @@ class TestResolveCoreDeviceVersion:
         assert mounter.resolve_core_device_version() == coredevice.DEFAULT_CORE_DEVICE_VERSION
 
 
-def _make_image(tmp_path, build: str, board: str = "0x6", chip: str = "0x8100",
-                types: tuple = ("ExampleProduct,1",)) -> Path:
+def _make_image(tmp_path, version: str, build: Optional[str] = None, board: str = "0x6",
+                chip: str = "0x8100", types: tuple = ("ExampleProduct,1",)) -> Path:
     'Create one image in the cache (three pieces + manifest) for the picking / mounting cases.'
-    directory = paths.ensure(paths.ddi_dir(None, build))
+    directory = paths.ensure(paths.ddi_dir(None, version))
     (directory / "Image.dmg").write_bytes(b"dmg")
     (directory / "Image.dmg.trustcache").write_bytes(b"tc")
     (directory / "BuildManifest.plist").write_bytes(plistlib.dumps({
-        "ProductBuildVersion": build,
+        "ProductBuildVersion": build or version,
         "SupportedProductTypes": list(types),
         "BuildIdentities": [{"ApBoardID": board, "ApChipID": chip, "Manifest": {}}],
     }))
@@ -865,6 +867,141 @@ class TestDdiImages:
         self._make(tmp_path, "ExampleBuild9", board="0xFF", chip="0x9999")
         picked = mounter.pick_image("ExampleProduct,1", _IDENTIFIERS)
         assert picked is not None and picked.image.parent == good
+
+
+class TestPerDevicePayload:
+    'One payload, several devices: the payload is shared, the signature is per device.'
+
+    @staticmethod
+    def _cache(tmp_path, build: str = "ExampleBuild1", payloads: tuple = ()) -> Path:
+        'One cache directory with a manifest that declares a payload per chip.'
+        directory = paths.ensure(paths.ddi_dir(None, build))
+        identities = []
+        for name, payload, chip, declared in payloads:
+            (directory / name).write_bytes(payload)
+            (directory / (name + ".trustcache")).write_bytes(b"tc")
+            identities.append({
+                "ApBoardID": "0x6", "ApChipID": chip,
+                "Manifest": {"PersonalizedDMG": {"Digest": declared or
+                                                 hashlib.sha384(payload).digest()}},
+            })
+        (directory / "BuildManifest.plist").write_bytes(plistlib.dumps({
+            "ProductBuildVersion": build,
+            "SupportedProductTypes": ["ExampleProduct,1"],
+            "BuildIdentities": identities,
+        }))
+        return directory
+
+    @staticmethod
+    def _device(chip: int) -> "_Device":
+        return _Device({
+            "CopyDevices": [{"EntryList": []}, {"EntryList": [_PERSONALIZED_ENTRY]}],
+            "QueryDeveloperModeStatus": {"DeveloperModeStatus": True},
+            "QueryPersonalizationIdentifiers": {
+                "PersonalizationIdentifiers": {"BoardId": 0x6, "ChipID": chip}},
+            "QueryPersonalizationManifest": {"Status": "Success"},
+            "QueryNonce": {"PersonalizationNonce": b"\x01" * 32},
+        })
+
+    @staticmethod
+    def _stub(monkeypatch, seen: list) -> None:
+        monkeypatch.setattr(tss, "img4_ticket",
+                            lambda request, timeout=30.0: (seen.append(dict(request)), b"TICKET")[1])
+        monkeypatch.setattr(mounter.MobileImageMounter, "upload_image",
+                            lambda self, image, signature, image_type="Personalized": None)
+        monkeypatch.setattr(mounter.MobileImageMounter, "mount_image",
+                            lambda self, signature, image_type="Personalized", extras=None: None)
+
+    def test_two_devices_share_the_payload_and_sign_for_themselves(self, tmp_path,
+                                                                   monkeypatch) -> None:
+        'The same cached image on two devices: each one gets a signature of its own.'
+        monkeypatch.setenv(paths.ENV_HOME, str(tmp_path))
+        self._cache(tmp_path, payloads=(("Image.dmg", b"payload-a", "0x8100", None),
+                                        ("Image.dmg", b"payload-a", "0x8101", None)))
+        seen: list[dict] = []
+        self._stub(monkeypatch, seen)
+
+        for chip in (0x8100, 0x8101):
+            device = self._device(chip)
+            path = mounter.MobileImageMounter(device.conn()).mount(
+                product_type="ExampleProduct,1", ecid=0x1234)
+            assert path == "/System/Developer"
+            device.close()
+
+        assert [request["ApChipID"] for request in seen] == [0x8100, 0x8101]
+
+    def test_a_payload_of_another_chip_family_is_refused(self, tmp_path,
+                                                          monkeypatch) -> None:
+        'The cached payload is not the one this device needs: say so, do not fail at the device.'
+        monkeypatch.setenv(paths.ENV_HOME, str(tmp_path))
+        self._cache(tmp_path, payloads=(("Image.dmg", b"payload-a", "0x8100",
+                                         hashlib.sha384(b"payload-b").digest()),))
+        device = self._device(0x8100)
+        with pytest.raises(FileNotFoundError, match="covers this device"):
+            mounter.MobileImageMounter(device.conn()).mount(
+                product_type="ExampleProduct,1", ecid=0x1234)
+        device.close()
+
+    def test_an_explicit_payload_is_checked_against_that_device(self, tmp_path,
+                                                                 monkeypatch) -> None:
+        'A payload given by hand must match the device identity, not just any identity.'
+        monkeypatch.setenv(paths.ENV_HOME, str(tmp_path))
+        self._cache(tmp_path, payloads=(("Image.dmg", b"payload-a", "0x8100",
+                                         hashlib.sha384(b"payload-b").digest()),))
+        device = self._device(0x8100)
+        with pytest.raises(ServiceError, match="do not match"):
+            mounter.MobileImageMounter(device.conn()).mount(image=b"other-payload",
+                                                             ecid=0x1234)
+        device.close()
+
+
+class TestVersionPick:
+    'One image per iOS version; a device gets the one for its version.'
+
+    def test_the_image_of_that_release_is_used(self, tmp_path, monkeypatch) -> None:
+        'Two releases in the cache: the one for the device wins, even when the other is newer.'
+        monkeypatch.setenv(paths.ENV_HOME, str(tmp_path))
+        _make_image(tmp_path, "27", build="27A266a")
+        older = _make_image(tmp_path, "26", build="26A1000a")
+        os.utime(older / "BuildManifest.plist", (time.time() + 10, time.time() + 10))
+        picked = mounter.pick_image("ExampleProduct,1", _IDENTIFIERS, "27")
+        assert picked is not None and picked.version == "27"
+
+    def test_an_image_of_another_release_is_not_used(self, tmp_path, monkeypatch) -> None:
+        'The cache holds another release only: say so instead of trying it.'
+        monkeypatch.setenv(paths.ENV_HOME, str(tmp_path))
+        _make_image(tmp_path, "27", build="27A266a")
+        picked = mounter.pick_image("ExampleProduct,1", _IDENTIFIERS, "26")
+        assert picked is None
+        text = mounter.no_image_text("ExampleProduct,1", _IDENTIFIERS, "26")
+        assert "iOS 26" in text and "iOS 27" in text
+
+    def test_the_source_lists_the_releases_it_serves(self, tmp_path) -> None:
+        'The source lists the iOS releases it has an image for.'
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "index.json").write_text(json.dumps({
+            "latest": "27",
+            "versions": ["26", "27"],
+        }), encoding="utf-8")
+        assert mounter.remote_versions(base=str(source)) == ["26", "27"]
+        assert mounter.version_for("27", base=str(source)) == "27"
+        assert mounter.version_for("27.1", base=str(source)) == "27"
+        assert mounter.version_for("18.0", base=str(source)) is None
+
+    def test_only_the_release_of_the_device_is_fetched(self, tmp_path, monkeypatch) -> None:
+        'The device asks for its release; the other one is never downloaded.'
+        monkeypatch.setenv(paths.ENV_HOME, str(tmp_path / "home"))
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "index.json").write_text(json.dumps({
+            "versions": ["26", "27"],
+        }), encoding="utf-8")
+        fetched: list[str] = []
+        monkeypatch.setattr(mounter.source, "fetch_image",
+                            lambda version, **kw: fetched.append(version))
+        mounter.ensure_image("ExampleProduct,1", _IDENTIFIERS, "27.1", base=str(source))
+        assert fetched == ["27"]
 
 
 class TestMountFallback:
@@ -918,19 +1055,18 @@ class TestMountFallback:
         assert seen["signature"] == b"TICKET"
         device.close()
 
-    def test_requested_build_is_used(self, tmp_path, monkeypatch) -> None:
-        'A requested image is used even if it is not first in the ordering.'
+    def test_the_image_that_fits_the_device_is_used(self, tmp_path, monkeypatch) -> None:
+        'Two images in the cache: the one whose identity matches this device is mounted.'
         monkeypatch.setenv(paths.ENV_HOME, str(tmp_path))
         _make_image(tmp_path, "ExampleBuild1")
-        newer = _make_image(tmp_path, "ExampleBuild9")
+        newer = _make_image(tmp_path, "ExampleBuild9", board="0xFF", chip="0x9999")
         os.utime(newer / "BuildManifest.plist", (time.time() + 10, time.time() + 10))
 
         notes: list[str] = []
         seen: dict = {}
         self._stub(monkeypatch, lambda request, timeout=30.0: b"TICKET", seen)
         device = self._device()
-        mounter.MobileImageMounter(device.conn()).mount(ddi_build="ExampleBuild1",
-                                                        ecid=0x1234,
+        mounter.MobileImageMounter(device.conn()).mount(ecid=0x1234,
                                                         on_status=notes.append)
         assert any("ExampleBuild1" in note for note in notes)
         assert not any("ExampleBuild9" in note for note in notes)
@@ -941,14 +1077,14 @@ class TestFetchImage:
     'Fetch an image from a custom source (a local directory / share, or an HTTP directory).'
 
     @staticmethod
-    def _source(tmp_path, build: str = "ExampleBuild1", *, bad_sum: bool = False,
+    def _source(tmp_path, version: str = "27.0",
                 digest: "bytes | None" = None) -> Path:
-        directory = tmp_path / "source" / build
+        directory = tmp_path / "source" / version
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "Image.dmg").write_bytes(b"dmg")
         (directory / "Image.dmg.trustcache").write_bytes(b"tc")
         manifest: dict = {
-            "ProductBuildVersion": build,
+            "ProductBuildVersion": "27A266a",
             "SupportedProductTypes": ["ExampleProduct,1"],
             "BuildIdentities": [{"ApBoardID": "0x6", "ApChipID": "0x8100",
                                  "Manifest": {}}],
@@ -957,33 +1093,22 @@ class TestFetchImage:
             manifest["BuildIdentities"][0]["Manifest"]["PersonalizedDMG"] = {
                 "Digest": digest}
         (directory / "BuildManifest.plist").write_bytes(plistlib.dumps(manifest))
-        lines = [f"{hashlib.sha256((directory / n).read_bytes()).hexdigest()}  {n}"
-                 for n in mounter.DDI_FILES]
-        if bad_sum:
-            lines[0] = "0" * 64 + "  Image.dmg"
-        (directory / "SHA256SUMS").write_text("\n".join(lines) + "\n", encoding="utf-8")
         return directory.parent
 
     def test_fetches_from_a_local_dir(self, tmp_path, monkeypatch) -> None:
         monkeypatch.setenv(paths.ENV_HOME, str(tmp_path / "home"))
         source = self._source(tmp_path)
-        item = mounter.fetch_image("ExampleBuild1", base=str(source))
-        assert item.build == "ExampleBuild1"
-        assert (paths.ddi_dir(None, "ExampleBuild1") / "Image.dmg").read_bytes() == b"dmg"
+        item = mounter.fetch_image("27.0", base=str(source))
+        assert item.build == "27A266a"
+        assert (paths.ddi_dir(None, "27.0") / "Image.dmg").read_bytes() == b"dmg"
         assert item.trustcache is not None
-
-    def test_bad_checksum_is_rejected(self, tmp_path, monkeypatch) -> None:
-        monkeypatch.setenv(paths.ENV_HOME, str(tmp_path / "home"))
-        source = self._source(tmp_path, bad_sum=True)
-        with pytest.raises(ServiceError, match='failed verification'):
-            mounter.fetch_image("ExampleBuild1", base=str(source))
 
     def test_mismatched_source_is_rejected(self, tmp_path, monkeypatch) -> None:
         'A dmg and manifest from the source that do not match: stop while fetching, not at mount time.'
         monkeypatch.setenv(paths.ENV_HOME, str(tmp_path / "home"))
         source = self._source(tmp_path, digest=hashlib.sha384(b"another-build").digest())
         with pytest.raises(ServiceError, match='do not match'):
-            mounter.fetch_image("ExampleBuild1", base=str(source))
+            mounter.fetch_image("27.0", base=str(source))
 
     def test_fetch_defaults_to_the_project_mirror(self, tmp_path, monkeypatch) -> None:
         'With no --url and no env var, fall back to DEFAULT_DDI_URL instead of refusing to fetch.'
@@ -995,7 +1120,7 @@ class TestFetchImage:
             seen.append(base)
             raise RuntimeError("sentinel")
 
-        monkeypatch.setattr(mounter, "_read_source", fake_read)
+        monkeypatch.setattr(mounter.source, "_read_source", fake_read)
         with pytest.raises(RuntimeError, match="sentinel"):
             mounter.fetch_image("ExampleBuild1")
         assert seen == [mounter.DEFAULT_DDI_URL]
@@ -1007,7 +1132,7 @@ class TestEnsureImage:
     def test_cache_is_used_without_network(self, tmp_path, monkeypatch) -> None:
         monkeypatch.setenv(paths.ENV_HOME, str(tmp_path / "home"))
         _make_image(tmp_path, "ExampleBuild1")
-        monkeypatch.setattr(mounter, "fetch_image",
+        monkeypatch.setattr(mounter.source, "fetch_image",
                             lambda *a, **kw: pytest.fail("must not download when the cache has one"))
         items = mounter.ensure_image("ExampleProduct,1")
         assert [item.build for item in items] == ["ExampleBuild1"]
@@ -1016,16 +1141,18 @@ class TestEnsureImage:
         monkeypatch.setenv(paths.ENV_HOME, str(tmp_path / "home"))
         seen: list[tuple] = []
 
-        def fake_fetch(build: str, base=None, token=None, **kw):
-            seen.append((build, base))
-            return mounter.DdiImage(build=build, image=_make_image(tmp_path, build) / "Image.dmg",
-                                    manifest=paths.ddi_dir(None, build) / "BuildManifest.plist")
+        def fake_fetch(version: str, base=None, token=None, **kw):
+            seen.append((version, base))
+            directory = _make_image(tmp_path, version)
+            return mounter.DdiImage(build=version, image=directory / "Image.dmg",
+                                    manifest=directory / "BuildManifest.plist")
 
-        monkeypatch.setattr(mounter, "fetch_image", fake_fetch)
-        monkeypatch.setattr(mounter, "remote_builds", lambda base=None, token=None: ["ExampleBuild1"])
+        monkeypatch.setattr(mounter.source, "fetch_image", fake_fetch)
+        monkeypatch.setattr(mounter.source, "remote_versions",
+                            lambda base=None, token=None: ["27.0"])
         items = mounter.ensure_image("ExampleProduct,1")
-        assert [item.build for item in items] == ["ExampleBuild1"]
-        assert seen == [("ExampleBuild1", mounter.DEFAULT_DDI_URL)]
+        assert [item.build for item in items] == ["27.0"]
+        assert seen == [("27.0", mounter.DEFAULT_DDI_URL)]
 
     def test_download_failure_returns_nothing(self, tmp_path, monkeypatch) -> None:
         monkeypatch.setenv(paths.ENV_HOME, str(tmp_path / "home"))
@@ -1033,17 +1160,15 @@ class TestEnsureImage:
         def fake_fetch(*a, **kw):
             raise OpenDeviceError("offline")
 
-        monkeypatch.setattr(mounter, "fetch_image", fake_fetch)
-        monkeypatch.setattr(mounter, "remote_builds", lambda base=None, token=None: ["ExampleBuild1"])
+        monkeypatch.setattr(mounter.source, "fetch_image", fake_fetch)
+        monkeypatch.setattr(mounter.source, "remote_versions",
+                            lambda base=None, token=None: ["27.0"])
         assert mounter.ensure_image("ExampleProduct,1") == []
 
-    def test_remote_builds_reads_index(self, tmp_path) -> None:
-        (tmp_path / "index.json").write_text('{"builds": ["ExampleBuild9", "ExampleBuild1"]}',
+    def test_remote_versions_reads_index(self, tmp_path) -> None:
+        (tmp_path / "index.json").write_text('{"versions": ["26.0", "27.0"]}',
                                              encoding="utf-8")
-        assert mounter.remote_builds(str(tmp_path)) == ["ExampleBuild9", "ExampleBuild1"]
-
-    def test_remote_builds_falls_back(self, tmp_path) -> None:
-        assert mounter.remote_builds(str(tmp_path)) == [mounter.DEFAULT_DDI_BUILD]
+        assert mounter.remote_versions(str(tmp_path)) == ["26.0", "27.0"]
 
 
 class TestTss:

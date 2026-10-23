@@ -28,7 +28,7 @@ OWNER: dict[str, str] = {
     "media": "media", "rtp": "media", "stream": "media",
     "dtx": "ax", "ax": "ax",
     "afc": "services", "installation": "services", "diagnostics": "services",
-    "syslog": "services", "amfi": "services", "mounter": "services", "tss": "services",
+    "syslog": "services", "amfi": "services", "tss": "services",
 }
 
 SUBPACKAGES = ("core", "transport", "remote", "wireless", "input", "media", "ax", "services")

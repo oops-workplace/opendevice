@@ -158,19 +158,25 @@ def cmd_mounter(args: argparse.Namespace) -> int:
                 except Exception:                   # noqa
                     identifiers = None
                 product = getattr(link.rsd, "product_type", None) or _product_of(link)
+                version = mounter_module.version_of(link.lockdown, link.rsd)
                 for item in images:
                     usable = item.supports(product) and (
                         item.identity_for(identifiers) is not None if identifiers else True)
-                    output.line(f"{item.build}  "
+                    output.line(f"{item.build}  iOS {item.version or '?'}  "
                                 f"{'OK for this device' if usable else 'unusable for this device'}  "
                                 f"{len(item.supported)} product types{item.image.parent}")
                 return 0
             elif action == "fetch":
+                version = mounter_module.version_for(
+                    args.version, base=getattr(args, "url", None) or None,
+                    token=getattr(args, "token", None) or None)
+                if version is None:
+                    output.error(f"the source has no image for iOS {args.version}")
+                    return 1
                 item = mounter_module.fetch_image(
-                    args.build, base=getattr(args, "url", None) or None,
+                    version, base=getattr(args, "url", None) or None,
                     token=getattr(args, "token", None) or None,
-                    on_status=output.note,
-                    verify=not getattr(args, "no_verify", False))
+                    on_status=output.note)
                 output.line(f"installed {item.build} ({len(item.supported)} product types) ->{item.image.parent}")
                 return 0
             elif action == "mount":
@@ -178,18 +184,17 @@ def cmd_mounter(args: argparse.Namespace) -> int:
                 if getattr(args, "manifest", None):
                     manifest = Path(args.manifest).read_bytes()
                 product_type = getattr(link.rsd, "product_type", None)
-                ddi_build = getattr(args, "build", None) or None
+                version = mounter_module.release_of(
+                    mounter_module.version_of(link.lockdown, link.rsd))
                 if not getattr(args, "image", None) and not getattr(args, "no_fetch", False):
                     mounter_module.ensure_image(
                         product_type,
                         mounter.personalization_identifiers(mounter_module.PERSONALIZED_DDI),
-                        ddi_build, base=getattr(args, "url", None) or None,
+                        version, base=getattr(args, "url", None) or None,
                         token=getattr(args, "token", None) or None, on_status=output.note)
                 path = mounter.mount(
                     image=getattr(args, "image", None), manifest=manifest,
-                    product_type=product_type,
-                    build=getattr(link.rsd, "build_version", None),
-                    ddi_build=ddi_build,
+                    product_type=product_type, version=version,
                     ecid=_ecid_of(link), on_status=output.note)
                 output.line(f"mounted at {path}")
                 output.note(f"CoreDevice version: {mounter.core_device_version() or '(unreadable)'}")

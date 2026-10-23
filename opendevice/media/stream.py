@@ -96,7 +96,7 @@ class MediaStreamSession:
             if "Remote control requires" in text or "9021" in text:
                 raise OpenDeviceError(
                     "this device's OS does not support media streaming. Device replied: "
-                    + text[:160] + '\n  - screen mirroring + touch injection need **iOS 27.0+** (media stream sessions only exist from 27);\n  - other commands still work on older systems: deviceinfo / get / applist / afc / install / screenshot / power / syslog / devmode do not need the stream.') from None
+                    + text[:160] + '\n  - screen mirroring + touch injection need a recent system (media stream sessions only exist on the newest ones);\n  - other commands still work on older systems: deviceinfo / get / applist / afc / install / screenshot / power / syslog / devmode do not need the stream.') from None
             raise
         connection = result.get("connection", {}) or {}
         self.answer = result.get("negotiatorAnswer", b"")

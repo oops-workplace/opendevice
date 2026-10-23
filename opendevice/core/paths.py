@@ -36,13 +36,13 @@ def records_dir() -> Path:
     return root()
 
 
-def ddi_dir(product_type: Optional[str] = None, build: Optional[str] = None) -> Path:
-    'Disk image (DDI) cache: ``ddi[/<ProductType>[/<iOS build>]]``.'
+def ddi_dir(product_type: Optional[str] = None, version: Optional[str] = None) -> Path:
+    'Disk image (DDI) cache: ``ddi[/<ProductType>[/<iOS version>]]``.'
     path = root() / "ddi"
     if product_type:
         path = path / product_type
-    if build:
-        path = path / build
+    if version:
+        path = path / version
     return path
 
 

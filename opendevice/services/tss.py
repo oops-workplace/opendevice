@@ -45,7 +45,7 @@ def _number(value: Any) -> Any:
 
 def cryptex_request(identity: Mapping[str, Any], nonce: bytes, udid: str,
                     digests: Mapping[str, bytes]) -> dict[str, Any]:
-    'Build a **Cryptex DDI** TSS request (the iOS 27 ticket is called ``Cryptex1,Ticket``).'
+    'Build a **cryptex DDI** TSS request (the cryptex ticket is called ``Cryptex1,Ticket``).'
     request = new_request(CRYPTEX_CLIENT_VERSION)
     request.update({
         "@BBTicket": True,
