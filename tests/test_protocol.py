@@ -472,6 +472,7 @@ class TestRrp:
             right.close()
 
     def test_hkdf_is_deterministic(self) -> None:
+        pytest.importorskip("cryptography")
         assert rrp._hkdf(b"ikm", None, b"ClientEncrypt-main") == \
             rrp._hkdf(b"ikm", None, b"ClientEncrypt-main")
         assert len(rrp._hkdf(b"ikm", None, b"info")) == 32
@@ -479,6 +480,7 @@ class TestRrp:
 
     def test_hkdf_empty_salt_equals_no_salt(self) -> None:
         'In HKDF "no salt" means an all-zero salt, so ``None`` and ``b""`` are equal - noted so nobody trips.'
+        pytest.importorskip("cryptography")
         assert rrp._hkdf(b"ikm", None, b"info") == rrp._hkdf(b"ikm", b"", b"info")
 
     def test_record_filename_round_trip(self, tmp_path, monkeypatch) -> None:

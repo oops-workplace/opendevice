@@ -168,8 +168,8 @@ class DeviceLock:
         self._beating = True
 
         def loop() -> None:
+            path = paths.lock_file(self.udid)
             while self._beating and not self._released:
-                path = paths.lock_file(self.udid)
                 try:
                     owner = int(json.loads(path.read_text(encoding="utf-8"))
                                 .get("pid") or 0)
