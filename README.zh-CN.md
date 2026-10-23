@@ -4,7 +4,6 @@
 
 [English](https://github.com/oops-workplace/opendevice/blob/master/README.md) · 简体中文
 
-[![CI](https://github.com/oops-workplace/opendevice/actions/workflows/ci.yml/badge.svg)](https://github.com/oops-workplace/opendevice/actions/workflows/ci.yml)
 [![PyPI version](https://img.shields.io/pypi/v/opendevice.svg)](https://pypi.org/project/opendevice/)
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/opendevice.svg)](https://pypi.org/project/opendevice/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
