@@ -6,7 +6,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/opendevice.svg)](https://pypi.org/project/opendevice/)
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/opendevice.svg)](https://pypi.org/project/opendevice/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
 
 </div>
 
