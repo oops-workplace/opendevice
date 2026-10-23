@@ -547,10 +547,8 @@ class MobileImageMounter(Service):
                 "    - Image.dmg              image payload\n"
                 "    - BuildManifest.plist    manifest used for signing\n"
                 "    - *.trustcache           trust cache for the image\n"
-                "  Copy them from a Mac with Xcode, or run on that Mac:\n"
-                "    python -c \"from pymobiledevice3.services.mobile_image_mounter import "
-                'fetch_personalized_ddi; print(fetch_personalized_ddi())"\n'
-                "  which downloads all three and prints their paths."
+                "  They are fetched from Apple's TSS service on a Mac with Xcode and signed\n"
+                "  for this device; copy the three files into the directory above and retry."
             )
 
         identifiers = identifiers or self.personalization_identifiers(PERSONALIZED_DDI)
