@@ -18,6 +18,9 @@ venv/
 # Scratch files left by tools
 *.log
 
+# Local notes: kept on this machine only
+NOTES.md
+
 # Developer disk images: fetched at runtime, never committed
 *.dmg
 *.trustcache
