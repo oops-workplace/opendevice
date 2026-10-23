@@ -3,6 +3,8 @@ from __future__ import annotations
 import plistlib
 import socket
 import struct
+import subprocess
+import sys
 import time
 
 import pytest
@@ -416,6 +418,13 @@ class TestHid:
 
 
 class TestRrp:
+    def test_importing_the_wireless_package_needs_no_cryptography(self) -> None:
+        'The wired path must not pull in the wireless dependencies.'
+        code = ("import sys; sys.modules['cryptography'] = None; "
+                "import opendevice.wireless.rrp; import opendevice.cli")
+        result = subprocess.run([sys.executable, "-c", code],
+                                capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
     def test_tlv_round_trip(self) -> None:
         tlv = rrp.build_tlv([(rrp.TLV.STATE, b"\x01"),
                              (rrp.TLV.PUBLIC_KEY, bytes(range(32)))])

@@ -12,19 +12,22 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
-
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.asymmetric.x25519 import (
-    X25519PrivateKey,
-    X25519PublicKey,
-)
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..core import paths
 from ..core.errors import OpenDeviceError
+
+# The cryptography primitives are imported inside the functions that need them:
+# the wired path must stay free of third-party dependencies.
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.asymmetric.x25519 import (
+        X25519PrivateKey,
+        X25519PublicKey,
+    )
+    from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 RPPAIRING_MAGIC = b"RPPairing"
 CDTUNNEL_MAGIC = b"CDTunnel"
@@ -278,6 +281,9 @@ class RemotePairingClient:
         self.sock = sock
         self._srp: Any = None
 
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+
         self.x25519_private = X25519PrivateKey.generate()
         self.ed25519_private = Ed25519PrivateKey.generate()
         self.identifier = host_identifier or _host_identifier()
@@ -393,6 +399,9 @@ class RemotePairingClient:
             self._send_pair_verify_failed()
             return False
 
+        from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PublicKey
+        from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
         peer_public = X25519PublicKey.from_public_bytes(data[TLV.PUBLIC_KEY])
         self.encryption_key = self.x25519_private.exchange(peer_public)
 
@@ -424,6 +433,8 @@ class RemotePairingClient:
 
     def _signing_key(self) -> Ed25519PrivateKey:
         'Ed25519 private key used for signing (an all-zero placeholder when there is no pairing record, matching Apple).'
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
         if self.record is not None and self.record.private_key:
             return Ed25519PrivateKey.from_private_bytes(self.record.private_key)
         return Ed25519PrivateKey.from_private_bytes(b"\x00" * 32)
@@ -444,6 +455,8 @@ class RemotePairingClient:
 
     def _init_encryption_keys(self) -> None:
         'Derive the two control-channel keys (separate for send and receive).'
+        from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
         if self.encryption_key is None:
             raise OpenDeviceError('pair-verify produced no shared secret')
         self.client_cip = ChaCha20Poly1305(_hkdf(self.encryption_key, None,
@@ -458,6 +471,8 @@ class RemotePairingClient:
             self._handshake()
         self._pair_consent(pin)
         self._pair_srp_proof()
+
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
         self.ed25519_private = Ed25519PrivateKey.generate()
         alt_irk = self._save_pair_record_on_peer()
@@ -579,6 +594,8 @@ class RemotePairingClient:
             "name": _host_name(),
         })
 
+        from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
         cip = ChaCha20Poly1305(setup_key)
         encrypted = cip.encrypt(b"\x00\x00\x00\x00PS-Msg05", build_tlv([
             (TLV.IDENTIFIER, self.identifier.encode()),
@@ -664,6 +681,9 @@ class RemotePairingClient:
 
 def _hkdf(ikm: bytes, salt: Optional[bytes], info: bytes, length: int = 32) -> bytes:
     'HKDF-SHA512 as used by RRP.'
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
     if salt is None:
         return HKDF(algorithm=hashes.SHA512(), length=length, salt=None,
                     info=info).derive(ikm)
