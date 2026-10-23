@@ -2,7 +2,7 @@
 
 # opendevice
 
-English · [简体中文](README.zh-CN.md)
+English · [简体中文](https://github.com/oops-workplace/opendevice/blob/master/README.zh-CN.md)
 
 [![PyPI version](https://img.shields.io/pypi/v/opendevice.svg)](https://pypi.org/project/opendevice/)
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/opendevice.svg)](https://pypi.org/project/opendevice/)
@@ -34,7 +34,7 @@ input, and a control tree with coordinates — **UI automation without installin
 
 ## Demo
 
-<img src="examples/webui/screenshots/demo.png" alt="webui demo" width="880">
+<img src="https://raw.githubusercontent.com/oops-workplace/opendevice/master/examples/webui/screenshots/demo.png" alt="webui demo" width="880">
 
 A single-page browser UI that ties these together: live screen, touch, control-tree
 coordinates, hardware keys, text input, USB↔Wi-Fi hot switching. The example

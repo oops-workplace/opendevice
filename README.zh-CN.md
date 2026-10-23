@@ -2,7 +2,7 @@
 
 # opendevice
 
-[English](README.md) · 简体中文
+[English](https://github.com/oops-workplace/opendevice/blob/master/README.md) · 简体中文
 
 [![PyPI version](https://img.shields.io/pypi/v/opendevice.svg)](https://pypi.org/project/opendevice/)
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/opendevice.svg)](https://pypi.org/project/opendevice/)
@@ -29,7 +29,7 @@
 
 ## 演示
 
-<img src="examples/webui/screenshots/demo.png" alt="webui 演示" width="880">
+<img src="https://raw.githubusercontent.com/oops-workplace/opendevice/master/examples/webui/screenshots/demo.png" alt="webui 演示" width="880">
 
 一个单页浏览器界面，把下列能力组合起来：实时画面、触摸、控件树坐标、硬件按键、
 中文输入、USB↔Wi-Fi 热切换。该示例仅存在于 GitHub 仓库，不随 PyPI 分发包发布：
