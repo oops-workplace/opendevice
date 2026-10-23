@@ -1,0 +1,15 @@
+# opendevice — all dependencies
+#
+# Wired (USB) mode is standard-library only and needs NONE of the packages below.
+# These cover the optional Wi-Fi mode (the "wifi" extra) and the test suite.
+# Canonical source is pyproject.toml; this file is a convenience mirror.
+# Equivalent to:  pip install -e ".[wifi,test]"
+
+# --- Wi-Fi mode (bonjour + RemotePairing + TLS-PSK); requires Python 3.13+ ---
+cryptography>=42
+zeroconf>=0.131
+srptools>=1.0
+opack2>=0.0.1
+
+# --- test suite ---
+pytest>=7

@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opendevice"
+dynamic = ["version"]
+description = "Lightweight iOS device framework: USB/Wi-Fi link, H.265 streaming, input injection and the accessibility tree"
+readme = "README.md"
+# USB path uses only the standard library and works from 3.9; Wi-Fi needs 3.13+ (stdlib TLS-PSK, see the wifi extra below)
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "cyrilchan" }]
+keywords = [
+    "ios", "iphone", "usbmux", "lockdownd", "remote-xpc", "coredevice",
+    "remote-pairing", "hid", "accessibility", "hevc", "automation",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Hardware",
+    "Typing :: Typed",
+]
+# the USB path must stay dependency-free - standard library only
+dependencies = []
+
+[project.optional-dependencies]
+# Wi-Fi (bonjour + RemotePairing). needs Python 3.13+ - the data plane uses
+# stdlib SSLContext.set_psk_client_callback (TLS 1.2-PSK), unavailable on 3.12 and below.
+wifi = [
+    "cryptography>=42",
+    "zeroconf>=0.131",
+    "srptools>=1.0",
+    "opack2>=0.0.1",
+]
+# running the test suite
+test = ["pytest>=7"]
+
+[project.scripts]
+opendevice = "opendevice.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/oops-workplace/opendevice"
+Repository = "https://github.com/oops-workplace/opendevice"
+Issues = "https://github.com/oops-workplace/opendevice/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "opendevice.__version__" }
+
+# Conventional layout: the repository root holds the package in a directory of the same name
+[tool.setuptools]
+packages = [
+    "opendevice",
+    "opendevice.ax",
+    "opendevice.cli",
+    "opendevice.core",
+    "opendevice.input",
+    "opendevice.media",
+    "opendevice.remote",
+    "opendevice.services",
+    "opendevice.session",
+    "opendevice.transport",
+    "opendevice.wireless",
+]
+
+[tool.setuptools.package-data]
+opendevice = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

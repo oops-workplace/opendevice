@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>webui</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="bar">
+  <span id="devName">device</span>
+  <span class="sep"></span>
+  <span class="grp">Keys</span>
+  <button class="btn key" data-key="home">Home</button>
+  <button class="btn key" data-key="power">Power</button>
+  <button class="btn key" data-key="volumeDown">Vol-</button>
+  <button class="btn key" data-key="volumeUp">Vol+</button>
+  <button class="btn key" data-key="mute">Mute</button>
+  <button class="btn key" data-key="siri">Siri</button>
+  <span class="sep"></span>
+  <span class="grp">Link</span>
+  <button class="btn" id="trUsb" title="USB (usbmux tunnel), drops when unplugged">USB</button>
+  <button class="btn" id="trWifi" title="Wi-Fi (bonjour + RemotePairing), unplug-safe">Wi-Fi</button>
+  <span id="usbState"></span>
+  <span class="sep"></span>
+  <button class="btn" id="streamToggle">Start stream</button>
+  <button class="btn" id="reconnect" title="stop stream -> drop clients -> drop tunnel -> reconnect (tens of seconds)">Reconnect</button>
+  <button class="btn" id="disconnect" title="stop stream + release all clients + drop tunnel: fully releases the device">Disconnect</button>
+  <span class="spacer"></span>
+  <input id="text" class="txt" type="text" placeholder="send text" autocomplete="off">
+  <button class="btn primary" id="sendPaste" title="write to the device clipboard then Cmd+V: send non-ASCII / emoji in one go">Send</button>
+  <button class="btn" id="send" title="type char by char, ASCII only">Type</button>
+  <button class="btn key" id="keyEnter" title="Enter">&#9166;</button>
+  <button class="btn key" id="keyDel" title="Backspace">&#9003;</button>
+</div>
+<div id="main">
+  <div id="stage"><div id="wrap">
+    <canvas id="frame"></canvas>
+    <canvas id="boxes"></canvas>
+    <div id="tip"></div>
+    <div id="banner" hidden>
+      <div class="bicon">!</div>
+      <div class="btext"><div id="bannerTitle"></div><div id="bannerBody"></div></div>
+      <div class="bact"><button class="btn sm" id="bannerBtn"></button></div>
+    </div>
+  </div>
+  <div id="wait"><div class="spin"></div><div id="waitText">preparing the screen...</div></div>
+  </div>
+  <div id="side">
+    <div id="panel">
+      <div class="ptitle">This device</div>
+      <div class="prow">
+        <span class="plabel">Developer mode</span>
+        <span class="pval" id="devmodeVal">—</span>
+      </div>
+      <div class="prow">
+        <span class="plabel">Disk image</span>
+        <span class="pval" id="imageVal">—</span>
+        <button class="btn sm" id="mountBtn">Push image</button>
+      </div>
+      <div class="prow">
+        <span class="plabel">Wireless pairing</span>
+        <span class="pval" id="pairVal">—</span>
+        <button class="btn sm" id="pairBtn">Pair</button>
+        <button class="btn sm" id="unpairBtn">Unpair</button>
+      </div>
+      <div class="pnote" id="mountNote" hidden></div>
+    </div>
+    <div id="sideHead">
+      <h3 id="sideTitle">Controls</h3>
+      <div class="tools">
+        <button class="btn sm" id="grab">Grab</button>
+        <button class="btn sm on" id="show">Boxes</button>
+        <button class="btn sm" id="clear">Clear</button>
+      </div>
+    </div>
+    <div id="list"></div>
+  </div>
+</div>
+<div id="stat">connecting...</div>
+<script src="/app.js"></script>
+</body>
+</html>
