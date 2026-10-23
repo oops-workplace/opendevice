@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=77"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
 
 [project]
 name = "opendevice"
@@ -50,27 +50,21 @@ Homepage = "https://github.com/oops-workplace/opendevice"
 Repository = "https://github.com/oops-workplace/opendevice"
 Issues = "https://github.com/oops-workplace/opendevice/issues"
 
-[tool.setuptools.dynamic]
-version = { attr = "opendevice.__version__" }
+[tool.hatch.version]
+path = "opendevice/__init__.py"
 
-# Conventional layout: the repository root holds the package in a directory of the same name
-[tool.setuptools]
-packages = [
-    "opendevice",
-    "opendevice.ax",
-    "opendevice.cli",
-    "opendevice.core",
-    "opendevice.input",
-    "opendevice.media",
-    "opendevice.remote",
-    "opendevice.services",
-    "opendevice.session",
-    "opendevice.transport",
-    "opendevice.wireless",
+[tool.hatch.build.targets.wheel]
+packages = ["opendevice"]
+
+# the source distribution carries the package and the documents only
+[tool.hatch.build.targets.sdist]
+include = [
+    "/opendevice",
+    "/README.md",
+    "/README.zh-CN.md",
+    "/LICENSE",
+    "/requirements.txt",
 ]
-
-[tool.setuptools.package-data]
-opendevice = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
