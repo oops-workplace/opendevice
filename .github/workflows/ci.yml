@@ -30,4 +30,16 @@ jobs:
         run: python -m pip install -e ".[wifi]"
 
       - name: Test
-        run: python -m pytest -q
+        run: |
+          set -o pipefail
+          python -m pytest -q --tb=line 2>&1 | tee pytest.log
+
+      - name: Publish the output
+        if: failure()
+        run: |
+          {
+            echo "### pytest output"
+            echo '```'
+            cat pytest.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
