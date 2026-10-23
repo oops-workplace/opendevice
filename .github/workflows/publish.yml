@@ -1,0 +1,35 @@
+name: publish
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read the package version
+        id: version
+        run: |
+          version=$(python3 -c "import pathlib, re; print(re.search(r'__version__ = \"([^\"]+)\"', pathlib.Path('opendevice/__init__.py').read_text()).group(1))")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Tag the version when it is new
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          if git rev-parse "refs/tags/v$version" >/dev/null 2>&1; then
+            echo "v$version was already released, nothing to do"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$version" -m "Release v$version"
+          git push origin "v$version"
