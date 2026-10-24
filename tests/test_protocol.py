@@ -15,6 +15,7 @@ from opendevice.ax import (
     dtx,
     find,
     find_all,
+    find_allow_paste,
     format_tree,
     parse_rect,
     to_tree,
@@ -248,6 +249,17 @@ class TestAx:
         assert [e.label for e in find_all(elements, 'cam')] == ['camera']
         assert [(depth, e.label) for depth, e in to_tree(elements)] == \
             [(0, 'search'), (1, 'camera')]
+
+    def test_find_allow_paste_picks_the_approving_button(self) -> None:
+        'The label match is exact, so a refusal ("不允许粘贴") can never be picked.'
+        allow = AXElement(1, 1, {"3": '允许粘贴', "21": "{{57, 474}, {140, 48}}", "77": 1})
+        deny = AXElement(2, 1, {"3": '不允许粘贴', "21": "{{205, 474}, {140, 48}}", "77": 1})
+        assert find_allow_paste([deny, allow]) is allow
+        assert find_allow_paste([deny]) is None
+
+        en_allow = AXElement(3, 1, {"3": 'Allow Paste', "21": "{{10, 20}, {80, 40}}", "77": 1})
+        assert find_allow_paste([en_allow]) is en_allow
+        assert find_allow_paste([]) is None
 
     def test_tree_knows_who_is_the_last_child(self) -> None:
         '``is_last`` picks ``+- `` or ``\\- ``.'

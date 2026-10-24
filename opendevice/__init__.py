@@ -18,7 +18,7 @@ from .transport.pairing import PairingRecord
 from .transport.service import ServiceConnection
 from .transport.usbmux import Mux, MuxDevice, connect_port, list_devices
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 __all__ = [
     "LockdownClient", "PairingRecord", "ServiceConnection",
     "Tunnel", "TunnelInfo",

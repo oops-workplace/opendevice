@@ -115,8 +115,7 @@ class ControlsMixin:
             except Exception:                      # noqa: BLE001
                 time.sleep(0.5)
                 continue
-            target = (ax_module.find(elements, "Allow Paste")
-                      or ax_module.find(elements, "Paste"))
+            target = ax_module.find_allow_paste(elements)
             if target is not None and target.center is not None:
                 return self.tap_element(target)
             time.sleep(0.7)

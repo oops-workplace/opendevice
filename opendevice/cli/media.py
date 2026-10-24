@@ -157,7 +157,7 @@ def cmd_type(args: argparse.Namespace) -> int:
 
 def _approve_paste(rsd: Any, attempts: int = 4) -> bool:
     'Dismiss the iOS "Allow Paste" prompt.'
-    from ..ax import AXClient, find
+    from ..ax import AXClient, find_allow_paste
     from ..input.hid import UniversalHID
 
     for _ in range(attempts):
@@ -167,7 +167,7 @@ def _approve_paste(rsd: Any, attempts: int = 4) -> bool:
         except Exception:
             time.sleep(0.5)
             continue
-        target = find(elements, 'Allow Paste') or find(elements, "Allow Paste")
+        target = find_allow_paste(elements)
         if target is not None and target.center is not None:
             width, height = _screen_points(rsd)
             center = target.center
@@ -418,7 +418,8 @@ def cmd_sendtext(args: argparse.Namespace) -> int:
             if _approve_paste(rsd):
                 output.note('auto-approved the paste prompt')
             else:
-                output.note(' (no "Allow Paste" prompt seen; the first paste may already be authorized)')
+                output.note(' (no paste prompt seen; if one is on screen, add its button '
+                            'labels to PASTE_ALLOW_LABELS in opendevice/ax/ax.py)')
     finally:
         if session is not None:
             session.stop()

@@ -384,6 +384,25 @@ def find_all(elements: list[AXElement], text: str) -> list[AXElement]:
     return [el for el in elements if text in el.text and el.center]
 
 
+#: The button that approves the iOS paste prompt, per device language.
+PASTE_ALLOW_LABELS: dict[str, tuple[str, ...]] = {
+    "zh-Hans": ("允许粘贴",),
+    "zh-Hant": ("允許貼上", "允許粘貼"),
+    "en": ("Allow Paste", "Paste"),
+    "ja": ("ペーストを許可",),
+}
+
+
+def find_allow_paste(elements: list[AXElement]) -> Optional[AXElement]:
+    'The paste prompt button that approves the paste (exact label match, never a refusal).'
+    wanted = {label.casefold() for labels in PASTE_ALLOW_LABELS.values() for label in labels}
+    for element in elements:
+        label = (element.label or "").strip()
+        if label and label.casefold() in wanted and element.center:
+            return element
+    return None
+
+
 def to_tree(elements: list[AXElement]) -> list[tuple[int, AXElement]]:
     'Flatten into ``[(depth, element)]`` for printing.'
     return [(depth, element) for depth, _last, element in tree_nodes(elements)]
