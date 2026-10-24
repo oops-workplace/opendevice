@@ -1,16 +1,22 @@
 name: publish
 
+# One workflow does the whole release: read the version, tag it, build, publish to
+# PyPI and create the GitHub release. It used to be a second workflow triggered by
+# the tag push, but a tag pushed with GITHUB_TOKEN does not trigger workflows.
 on:
   push:
     branches: [master]
+  workflow_dispatch:        # re-run by hand when a release failed half way
+
+permissions:
+  contents: write
 
 jobs:
-  publish:
+  tag:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      fresh: ${{ steps.version.outputs.fresh }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,15 +27,73 @@ jobs:
         run: |
           version=$(python3 -c "import pathlib, re; print(re.search(r'__version__ = \"([^\"]+)\"', pathlib.Path('opendevice/__init__.py').read_text()).group(1))")
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse "refs/tags/v$version" >/dev/null 2>&1; then
+            echo "fresh=false" >> "$GITHUB_OUTPUT"
+            echo "v$version is already tagged, nothing to release"
+          else
+            echo "fresh=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Tag the version when it is new
+        if: steps.version.outputs.fresh == 'true'
         run: |
           version="${{ steps.version.outputs.version }}"
-          if git rev-parse "refs/tags/v$version" >/dev/null 2>&1; then
-            echo "v$version was already released, nothing to do"
-            exit 0
-          fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "v$version" -m "Release v$version"
           git push origin "v$version"
+
+  release:
+    needs: tag
+    if: needs.tag.outputs.fresh == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Check that the tag matches the package version
+        env:
+          GITHUB_REF_NAME: v${{ needs.tag.outputs.version }}
+        run: python scripts/check_version.py
+
+      - name: Is this version already on PyPI?
+        id: pypi
+        run: |
+          if curl -fsS "https://pypi.org/pypi/opendevice/${{ needs.tag.outputs.version }}/json" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        if: steps.pypi.outputs.exists == 'false'
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+
+      - name: Validate the distributions
+        if: steps.pypi.outputs.exists == 'false'
+        run: python -m twine check dist/*
+
+      - name: Publish to PyPI
+        if: steps.pypi.outputs.exists == 'false'
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="v${{ needs.tag.outputs.version }}"
+          gh release view "$version" >/dev/null 2>&1 || \
+            gh release create "$version" --title "$version" --generate-notes --verify-tag
